@@ -2,13 +2,13 @@ package config
 
 import (
 	"log"
-	"os"
+	"syncedpz/pkg/utils"
 
 	"github.com/dgraph-io/badger"
 )
 
 const (
-	badgerDBPath = "data"
+	badgerDBPath = DataPath + "/badger"
 )
 
 var (
@@ -16,23 +16,10 @@ var (
 	DB             *badger.DB
 )
 
-// return true if the directory already exists, false if it was created
-func ensureDir(dirName string) bool {
-	if _, err := os.Stat(dirName); !os.IsNotExist(err) {
-		return true
-	}
-
-	err := os.MkdirAll(dirName, os.ModePerm)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return false
-}
-
 func init() {
 	var err error
 
-	FirstTimeSetup = !ensureDir(badgerDBPath)
+	FirstTimeSetup = !utils.EnsureDir(DataPath)
 
 	opts := badger.DefaultOptions(badgerDBPath)
 	opts.Logger = nil

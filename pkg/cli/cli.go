@@ -1,17 +1,19 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
 	"syncedpz/config"
-	"syncedpz/pkg/syncedpz"
 )
 
-func printUsage() {
-	fmt.Println("Usage: ")
-	fmt.Println("  syncedpz setup")
-	fmt.Println("  syncedpz run")
+func tryParseCommand(cmd *flag.FlagSet) {
+	err := cmd.Parse(os.Args[2:])
+	if err != nil {
+		cmd.Usage()
+		runtime.Goexit()
+	}
 }
 
 func validateArgs() {
@@ -21,35 +23,57 @@ func validateArgs() {
 	}
 }
 
-func setup() {
-	handleErr := func(err error) {
-		if err != nil {
+func Run() {
+	validateArgs()
+
+	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
+	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
+	addCmd := flag.NewFlagSet("add", flag.ExitOnError)
+	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
+
+	listType := listCmd.String("type", "local", "Type of servers to list")
+
+	switch os.Args[1] {
+	case "config":
+		tryParseCommand(configCmd)
+	case "run":
+		tryParseCommand(runCmd)
+	case "list":
+		tryParseCommand(listCmd)
+	case "add":
+		tryParseCommand(addCmd)
+	default:
+		printUsage()
+		runtime.Goexit()
+	}
+
+	if configCmd.Parsed() {
+		if configCmd.Arg(0) == "setup" {
 			config.FirstTimeSetup = true
 			setup()
+		} else if configCmd.Arg(0) == "list" {
+			setup()
+			listConfig()
+		} else {
+			fmt.Println("No argument for config")
+			runtime.Goexit()
 		}
+		return
 	}
-
-	if config.FirstTimeSetup {
-		exe_path := askForInput("Enter the path to the pz executable: ")
-		data_path := askForInput("Enter the path to the pz data directory: ")
-		syncedpz.SetupPzDirs(exe_path, data_path)
-
-		steamID := askForInput("Enter your steam id: ")
-		syncedpz.SetupSteamId(steamID)
-		config.PZ_SteamID = steamID
-	} else {
-		handleErr(syncedpz.LoadSteamID())
-		handleErr(syncedpz.LoadPzDirs())
-	}
-}
-
-func Run() {
-	//validateArgs()
 
 	setup()
 
-	fmt.Printf("Hello, World!\n\n")
-	fmt.Printf("PZ exe path: %s\n", config.PZ_ExePath)
-	fmt.Printf("PZ data path: %s\n", config.PZ_DataPath)
-	fmt.Printf("Steam ID: %s\n", config.PZ_SteamID)
+	if listCmd.Parsed() {
+		switch *listType {
+		case "local":
+			listLocalServers()
+		case "synced":
+			listSyncedServers()
+		default:
+			listCmd.Usage()
+			runtime.Goexit()
+		}
+	} else if addCmd.Parsed() {
+		addServer()
+	}
 }
