@@ -4,12 +4,15 @@ import (
 	"log"
 	"os/exec"
 	"syncedpz/pkg/utils"
+
+	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 var (
 	PZ_DataPath string
 	PZ_ExePath  string
 	PZ_SteamID  string
+	GitAuth     transport.AuthMethod
 	ServersPath = DataPath + "/servers"
 )
 

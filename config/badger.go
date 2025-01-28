@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"syncedpz/pkg/utils"
 
 	"github.com/dgraph-io/badger"
@@ -26,7 +25,5 @@ func init() {
 	opts.Truncate = true
 
 	DB, err = badger.Open(opts)
-	if err != nil {
-		log.Fatal(err)
-	}
+	utils.HandleErr(err)
 }

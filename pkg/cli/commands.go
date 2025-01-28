@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"syncedpz/config"
 	"syncedpz/pkg/syncedpz"
 )
@@ -34,9 +35,14 @@ func setup() {
 		steamID := askForInput("Enter your steam id: ")
 		syncedpz.SetupSteamId(steamID)
 		config.PZ_SteamID = steamID
+
+		gitUsername := askForInput("Enter your git username: ")
+		gitPassword := askForInput("Enter your git password (or your github token): ")
+		syncedpz.SetupGitAuth(gitUsername, gitPassword)
 	} else {
 		handleErr(syncedpz.LoadSteamID())
 		handleErr(syncedpz.LoadPzDirs())
+		handleErr(syncedpz.LoadGitAuth())
 	}
 }
 
@@ -78,5 +84,24 @@ func addServer() {
 	gitURL := askForInput("Enter the github link to the server: ")
 	ss := syncedpz.NewSyncedServer(server.Name, gitURL)
 	ss.Save()
-	ss.CopyPZServerToDir()
+
+	ss.InitGit()
+	changes := ss.Pull()
+	if changes {
+		fmt.Println("Warning! Apparently a server using this git repository already exists")
+		fmt.Println("and it already has some content.")
+		fmt.Println("Do you want to continue copying your local content to it?")
+		choice := askForInput("Enter y/N: ")
+		choice = strings.ToLower(choice)
+		choice = strings.TrimSpace(choice)
+		if choice != "y" {
+			fmt.Println("Aborting.")
+			ss.Delete()
+			return
+		}
+	}
+
+	ss.CopyLocalServerToSynced()
+	ss.UpdatePlayersFile()
+	ss.CommitAndPush()
 }
