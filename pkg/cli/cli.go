@@ -29,6 +29,7 @@ func Run() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	addCmd := flag.NewFlagSet("add", flag.ExitOnError)
+	cloneCmd := flag.NewFlagSet("clone", flag.ExitOnError)
 	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 
 	listType := listCmd.String("type", "local", "Type of servers to list")
@@ -42,6 +43,8 @@ func Run() {
 		tryParseCommand(listCmd)
 	case "add":
 		tryParseCommand(addCmd)
+	case "clone":
+		tryParseCommand(cloneCmd)
 	default:
 		printUsage()
 		runtime.Goexit()
@@ -75,5 +78,7 @@ func Run() {
 		}
 	} else if addCmd.Parsed() {
 		addServer()
+	} else if cloneCmd.Parsed() {
+		cloneServer()
 	}
 }

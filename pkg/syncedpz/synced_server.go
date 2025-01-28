@@ -180,7 +180,7 @@ func (ss *SyncedServer) InitGit() {
 	utils.EnsureDir(ss.GetServerPath())
 
 	repo, err := git.PlainOpen(ss.GetServerPath())
-	if errors.Is(err, git.ErrRepositoryNotExists) {
+	if err == git.ErrRepositoryNotExists {
 		fmt.Println("Creating local git repository")
 		repo, err = git.PlainInit(ss.GetServerPath(), false)
 		utils.HandleErr(err)
@@ -194,6 +194,48 @@ func (ss *SyncedServer) InitGit() {
 	}
 
 	ss.repo = repo
+}
+
+func (ss *SyncedServer) Clone() {
+	// gitreponame is the last sector of the giturl
+	gitRepoName := filepath.Base(ss.GitURL)
+	tempDirName := filepath.Join(config.ServersPath, gitRepoName)
+
+	utils.EnsureDir(config.ServersPath)
+	utils.EnsureDir(tempDirName)
+	repo, err := git.PlainClone(tempDirName, false, &git.CloneOptions{
+		URL:  ss.GitURL,
+		Auth: config.GitAuth,
+	})
+	utils.HandleErr(err)
+
+	ss.repo = repo
+
+	// Get server name
+	configPath := filepath.Join(tempDirName, "config")
+	err = filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if strings.HasSuffix(filepath.Base(path), ".ini") {
+			ss.Name = strings.TrimSuffix(filepath.Base(path), ".ini")
+			return errors.New("stop")
+		}
+		return nil
+	})
+	if err != nil && err.Error() != "stop" {
+		log.Fatal(err)
+	}
+
+	// Renames the directory to the server name
+	newDirName := ss.GetServerPath()
+	err = os.Rename(tempDirName, newDirName)
+	utils.HandleErr(err)
+
+	// Recreates repo with the new directory
+	ss.repo, err = git.PlainOpen(newDirName)
+	utils.HandleErr(err)
 }
 
 // Pull pulls the latest changes from the git repository
@@ -232,7 +274,9 @@ func (ss SyncedServer) Commit() {
 
 	commitMsg := fmt.Sprintf("SyncedPZ: synced by %s", config.PZ_SteamID)
 	_, err = w.Commit(commitMsg, &git.CommitOptions{})
-	utils.HandleErr(err)
+	if err != git.ErrEmptyCommit {
+		utils.HandleErr(err)
+	}
 }
 
 func (ss SyncedServer) Push() {
@@ -245,7 +289,9 @@ func (ss SyncedServer) Push() {
 		Auth:       config.GitAuth,
 		Progress:   os.Stdout,
 	})
-	utils.HandleErr(err)
+	if err != git.NoErrAlreadyUpToDate {
+		utils.HandleErr(err)
+	}
 }
 
 func (ss SyncedServer) CommitAndPush() {

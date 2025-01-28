@@ -81,7 +81,7 @@ func addServer() {
 	}
 
 	server := localServers[choiceInt]
-	gitURL := askForInput("Enter the github link to the server: ")
+	gitURL := askForInput("Enter the git repository link to the server: ")
 	ss := syncedpz.NewSyncedServer(server.Name, gitURL)
 	ss.Save()
 
@@ -104,4 +104,18 @@ func addServer() {
 	ss.CopyLocalServerToSynced()
 	ss.UpdatePlayersFile()
 	ss.CommitAndPush()
+
+	fmt.Println("Server added successfully")
+}
+
+func cloneServer() {
+	gitURL := askForInput("Enter the git repository link to the server: ")
+	ss := syncedpz.SyncedServer{GitURL: gitURL}
+
+	ss.Clone()
+	ss.UpdatePlayersFile()
+	ss.CommitAndPush()
+	ss.Save()
+
+	fmt.Println("Server cloned successfully")
 }
