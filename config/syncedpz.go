@@ -17,7 +17,7 @@ const (
 
 var (
 	PZ_DataPath string
-	PZ_ExePath  string
+	PZ_BatPath  string
 	PZ_SteamID  string
 	GitAuth     transport.AuthMethod
 	ServersPath = DataPath + "/servers"

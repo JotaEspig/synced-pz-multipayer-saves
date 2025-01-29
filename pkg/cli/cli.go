@@ -19,12 +19,15 @@ func tryParseCommand(cmd *flag.FlagSet) {
 	}
 }
 
-func Run() {
+func Run(ch chan os.Signal) {
 	defer func() {
 		// Read a single byte (key press)
 		fmt.Print(config.GTM("Press any key to exit..."))
 		var b [1]byte
 		_, _ = os.Stdin.Read(b[:])
+
+		// Send interrupt signal to main
+		ch <- os.Interrupt
 	}()
 
 	if err := syncedpz.LoadLanguage(); err != nil {
@@ -38,10 +41,14 @@ func Run() {
 	deleteCmd := flag.NewFlagSet("delete", flag.ExitOnError)
 	cloneCmd := flag.NewFlagSet("clone", flag.ExitOnError)
 	syncCmd := flag.NewFlagSet("sync", flag.ExitOnError)
-	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
+	playCmd := flag.NewFlagSet("play", flag.ExitOnError)
+	languageCmd := flag.NewFlagSet("language", flag.ExitOnError)
 
 	listType := listCmd.String("type", "local", config.GTM("Type of servers to list"))
 
+	if config.FirstTimeSetup {
+		fmt.Println(config.GTM("First time setup"))
+	}
 	setup()
 
 	if len(os.Args) < 2 {
@@ -54,8 +61,6 @@ func Run() {
 		tryParseCommand(menuCmd)
 	case "config":
 		tryParseCommand(configCmd)
-	case "run":
-		tryParseCommand(runCmd)
 	case "list":
 		tryParseCommand(listCmd)
 	case "add":
@@ -66,6 +71,10 @@ func Run() {
 		tryParseCommand(cloneCmd)
 	case "sync":
 		tryParseCommand(syncCmd)
+	case "play":
+		tryParseCommand(playCmd)
+	case "language":
+		tryParseCommand(languageCmd)
 	default:
 		printUsage()
 		runtime.Goexit()
@@ -100,5 +109,9 @@ func Run() {
 		cloneServer()
 	} else if syncCmd.Parsed() {
 		syncServers()
+	} else if playCmd.Parsed() {
+		play()
+	} else if languageCmd.Parsed() {
+		setLanguage()
 	}
 }

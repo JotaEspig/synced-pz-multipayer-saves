@@ -14,12 +14,12 @@ import (
 
 func LoadPzDirs() error {
 	err := config.DB.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("pz_exe_path"))
+		item, err := txn.Get([]byte("pz_bat_path"))
 		if err != nil {
 			return err
 		}
 		err = item.Value(func(val []byte) error {
-			config.PZ_ExePath = string(val)
+			config.PZ_BatPath = string(val)
 			return nil
 		})
 		if err != nil {
@@ -39,8 +39,8 @@ func LoadPzDirs() error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(config.PZ_ExePath); os.IsNotExist(err) {
-		return fmt.Errorf("%s dir does not exists\n", config.PZ_ExePath)
+	if _, err := os.Stat(config.PZ_BatPath); os.IsNotExist(err) {
+		return fmt.Errorf("%s dir does not exists\n", config.PZ_BatPath)
 	}
 	if _, err := os.Stat(config.PZ_DataPath); os.IsNotExist(err) {
 		return fmt.Errorf("%s dir does not exists\n", config.PZ_DataPath)
@@ -57,7 +57,7 @@ func SetupPzDirs(PZ_ExePath, PZ_DataPath string) {
 	}
 
 	err := config.DB.Update(func(txn *badger.Txn) error {
-		err := txn.Set([]byte("pz_exe_path"), []byte(PZ_ExePath))
+		err := txn.Set([]byte("pz_bat_path"), []byte(PZ_ExePath))
 		if err != nil {
 			return err
 		}

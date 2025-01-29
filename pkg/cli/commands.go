@@ -2,11 +2,15 @@ package cli
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syncedpz/config"
 	"syncedpz/pkg/syncedpz"
+	"syncedpz/pkg/utils"
 	"time"
+
+	"github.com/charmbracelet/log"
 )
 
 func printUsage() {
@@ -19,14 +23,26 @@ func printUsage() {
 	fmt.Println(config.GTM("  syncedpz delete = deletes a synced PZ server from the database only"))
 	fmt.Println(config.GTM("  syncedpz clone = adds a new synced PZ server from a git repository"))
 	fmt.Println(config.GTM("  syncedpz sync = syncs all servers"))
-	fmt.Println(config.GTM("  syncedpz play = syncs all servers at the start and at the end. And starts Project Zomboid"))
+	fmt.Println(config.GTM("  syncedpz play = syncs all servers at the start, every 5 minutes and at the end. And starts Project Zomboid"))
 	fmt.Println(config.GTM("  syncedpz language = sets the language of the application"))
 }
 
 func menu() {
 	var err error
 
-	functions := []func(){printUsage, setup, listConfig, listLocalServers, listSyncedServers, addServer, deleteServer, cloneServer, syncServers, setLanguage}
+	functions := []func(){
+		printUsage,
+		setup,
+		listConfig,
+		listLocalServers,
+		listSyncedServers,
+		addServer,
+		deleteServer,
+		cloneServer,
+		syncServers,
+		play,
+		setLanguage,
+	}
 
 	choice := -1
 	// Runs the menu until the user chooses to exit
@@ -43,8 +59,9 @@ func menu() {
 			fmt.Println(config.GTM("  [6] Delete synced server"))
 			fmt.Println(config.GTM("  [7] Clone synced server"))
 			fmt.Println(config.GTM("  [8] Sync servers"))
-			fmt.Println(config.GTM("  [9] Set language"))
-			fmt.Println(config.GTM("  [10] Exit"))
+			fmt.Println(config.GTM("  [9] Play"))
+			fmt.Println(config.GTM("  [10] Set language"))
+			fmt.Println(config.GTM("  [11] Exit"))
 
 			choiceStr := askForInput(config.GTM("Enter the number of the option you want to choose: "))
 			choice, err = strconv.Atoi(choiceStr)
@@ -79,15 +96,15 @@ func setup() {
 
 	if config.FirstTimeSetup {
 		fmt.Println(config.GTM("Leave the field empty to use the previous value (if it exists)"))
-		exe_path := askForInput(config.GTM("Enter the path to the pz executable: "))
-		if exe_path == "" {
-			exe_path = config.PZ_ExePath
+		batPath := askForInput(config.GTM("Enter the path to the pz executable (.bat file): "))
+		if batPath == "" {
+			batPath = config.PZ_BatPath
 		}
 		data_path := askForInput(config.GTM("Enter the path to the pz data directory: "))
 		if data_path == "" {
 			data_path = config.PZ_DataPath
 		}
-		syncedpz.SetupPzDirs(exe_path, data_path)
+		syncedpz.SetupPzDirs(batPath, data_path)
 
 		steamID := askForInput(config.GTM("Enter your steam id: "))
 		if steamID == "" {
@@ -108,7 +125,7 @@ func setup() {
 }
 
 func listConfig() {
-	fmt.Println(config.GTM("PZ Exe Path: "), config.PZ_ExePath)
+	fmt.Println(config.GTM("PZ Bat Path: "), config.PZ_BatPath)
 	fmt.Println(config.GTM("PZ Data Path: "), config.PZ_DataPath)
 	fmt.Println(config.GTM("Steam ID: "), config.PZ_SteamID)
 }
@@ -226,6 +243,52 @@ func syncServers() {
 		}
 		ss.EnsureUpdatedPlayerSaveFolders()
 	}
+}
+
+func play() {
+	keepSyncing := func(ch chan struct{}) {
+		log.Info("Keep syncing mode")
+
+		last5MinutesInterval := time.Now().Add(-5 * time.Minute)
+		for {
+			now := time.Now()
+
+			select {
+			case <-ch:
+				return
+			default:
+				if now.Sub(last5MinutesInterval).Minutes() >= 5 {
+					for _, ss := range syncedpz.GetSyncedServers() {
+						if ss.Pull() {
+							ss.CopySyncedServerToLocal()
+						} else {
+							ss.CopyLocalServerToSynced()
+							ss.CommitAndPush()
+						}
+						ss.EnsureUpdatedPlayerSaveFolders()
+					}
+					// Last 5 minutes interval is now
+					last5MinutesInterval = time.Now()
+				}
+			}
+		}
+	}
+
+	syncServers()
+
+	ch := make(chan struct{})
+	go keepSyncing(ch)
+
+	fmt.Println(config.PZ_BatPath)
+	cmd := exec.Command(config.PZ_BatPath)
+	utils.HandleErr(cmd.Start())
+
+	log.Info("Project Zomboid started with PID: ", cmd.Process.Pid)
+
+	cmd.Wait()
+	close(ch)
+
+	syncServers()
 }
 
 func setLanguage() {

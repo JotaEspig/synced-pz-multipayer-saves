@@ -317,6 +317,7 @@ func (ss SyncedServer) UpdatePlayersFile() {
 	log.Info("Players file updated")
 }
 
+// GetSyncedServers returns all synced servers
 func GetSyncedServers() map[string]*SyncedServer {
 	servers := map[string]*SyncedServer{}
 	err := config.DB.View(func(txn *badger.Txn) error {
