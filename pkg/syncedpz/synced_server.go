@@ -4,18 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
-	"errors"
-	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syncedpz/config"
 	"syncedpz/pkg/utils"
 
+	"github.com/charmbracelet/log"
 	"github.com/dgraph-io/badger"
 	"github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
 	cp "github.com/otiai10/copy"
 )
 
@@ -70,6 +68,8 @@ func (ss SyncedServer) Save() {
 		return txn.Set(ss.GetKey(), ss.Serialize())
 	})
 	utils.HandleErr(err)
+
+	log.Info("Server saved to database")
 }
 
 // Delete deletes the server object from the database
@@ -78,6 +78,8 @@ func (ss SyncedServer) Delete() {
 		return txn.Delete(ss.GetKey())
 	})
 	utils.HandleErr(err)
+
+	log.Info("Server deleted from database")
 }
 
 // Delete deletes the server object from the database
@@ -94,7 +96,9 @@ func (ss SyncedServer) GetServerPath() string {
 }
 
 // CopyLocalServerToSynced copies the local server files to the synced server repository
-func (ss SyncedServer) CopyLocalServerToSynced() {
+func (ss *SyncedServer) CopyLocalServerToSynced() {
+	log.Info("Copying local server to synced server")
+
 	ss.EnsureDirs()
 
 	// copy config files
@@ -107,8 +111,12 @@ func (ss SyncedServer) CopyLocalServerToSynced() {
 
 		// Checks if the filename starts with the server name
 		if strings.HasPrefix(filepath.Base(path), ss.Name) {
-			newConfigPath := filepath.Join(configPath, filepath.Base(path))
-			return cp.Copy(path, newConfigPath)
+			newConfigFilename := filepath.Join(configPath, filepath.Base(path))
+			err = os.Remove(newConfigFilename)
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			return cp.Copy(path, newConfigFilename)
 		}
 		return nil
 	})
@@ -117,25 +125,157 @@ func (ss SyncedServer) CopyLocalServerToSynced() {
 	// copy save files
 	savePath := filepath.Join(ss.GetServerPath(), "save")
 	pzSaveFilesPath := filepath.Join(config.PZ_DataPath, "Saves", "Multiplayer")
+	ssNameWithUnderScore := strings.ReplaceAll(ss.Name, " ", "_")
+	fullLocalServerPath := filepath.Join(pzSaveFilesPath, ssNameWithUnderScore)
 
+	log.Info("Removing old save files at synced server")
+	err = os.RemoveAll(savePath)
+	utils.HandleErr(err)
+
+	log.Info("Copying new save files to synced server")
+	utils.EnsureDir(savePath)
+	err = cp.Copy(fullLocalServerPath, savePath)
+	utils.HandleErr(err)
+
+	log.Info("Local server copied to synced server")
+}
+
+func (ss *SyncedServer) CopySyncedServerToLocal() {
+	log.Info("Copying synced server to local server")
+
+	// copy config files
+	configPath := filepath.Join(ss.GetServerPath(), "config")
+	pzConfigFilesPath := filepath.Join(config.PZ_DataPath, "Server")
+	err := filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Checks if the filename starts with the server name
+		if strings.HasPrefix(filepath.Base(path), ss.Name) {
+			newConfigFilename := filepath.Join(pzConfigFilesPath, filepath.Base(path))
+			err = os.Remove(newConfigFilename)
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			return cp.Copy(path, newConfigFilename)
+		}
+		return nil
+	})
+	utils.HandleErr(err)
+
+	// copy save files
+	savePath := filepath.Join(ss.GetServerPath(), "save")
+	pzSaveFilesPath := filepath.Join(config.PZ_DataPath, "Saves", "Multiplayer")
+	ssNameWithUnderScore := strings.ReplaceAll(ss.Name, " ", "_")
+	fullLocalServerPath := filepath.Join(pzSaveFilesPath, ssNameWithUnderScore)
+
+	log.Info("Removing old save files at local server")
+	err = os.RemoveAll(fullLocalServerPath)
+	utils.HandleErr(err)
+
+	log.Info("Copying new save files to local server")
+	utils.EnsureDir(fullLocalServerPath)
+	err = cp.Copy(savePath, fullLocalServerPath)
+	utils.HandleErr(err)
+
+	log.Info("Synced server copied to local server")
+}
+
+// EnsureUpdatedPlayerSaveFolders ensures that the player save folders are updated for each possible host of the server.
+// In Project Zomboid, when player X is hosting, player Y's game will create a new player save folder having <SteamIDPlayerX> as suffix.
+// So this function ensures that every player save folders for this server are updated.
+func (ss *SyncedServer) EnsureUpdatedPlayerSaveFolders() {
+	log.Info("Ensuring updated player save folders")
+
+	playerSavePath := filepath.Join(config.PZ_DataPath, "Saves", "Multiplayer")
 	ssNameWithUnderScore := strings.ReplaceAll(ss.Name, " ", "_")
 
-	entries, err := os.ReadDir(pzSaveFilesPath)
+	entries, err := os.ReadDir(playerSavePath)
 	utils.HandleErr(err)
+
+	playerFolders := []os.FileInfo{}
 	for _, entry := range entries {
-		path := filepath.Join(pzSaveFilesPath, entry.Name())
-		// Checks if the filename starts with the server name and doesnt end with _player
-		if strings.HasPrefix(filepath.Base(path), ssNameWithUnderScore) && !strings.HasSuffix(filepath.Base(path), "_player") {
-			if err := cp.Copy(path, savePath); err != nil {
-				log.Fatal(err)
-			}
+		hasNameInIt := strings.Contains(entry.Name(), ssNameWithUnderScore)
+		if hasNameInIt && strings.HasSuffix(entry.Name(), "_player") {
+			info, err := entry.Info()
+			utils.HandleErr(err)
+			playerFolders = append(playerFolders, info)
 		}
 	}
+	if len(playerFolders) == 0 {
+		return
+	}
+
+	sort.Slice(playerFolders, func(i, j int) bool {
+		return playerFolders[i].ModTime().After(playerFolders[j].ModTime())
+	})
+	mostRecentPlayerFolderName := playerFolders[0].Name()
+
+	// Ensures that a folder exist for every possible host
+	for _, player := range ss.GetPlayers() {
+		var playerFolderName string
+		if player == config.PZ_SteamID {
+			playerFolderName = ssNameWithUnderScore + "_player"
+		} else {
+			playerFolderName = player + "_" + ssNameWithUnderScore + "_player"
+		}
+		playerFolderPath := filepath.Join(playerSavePath, playerFolderName)
+		utils.EnsureDir(playerFolderPath)
+	}
+
+	// Ensures that the most recent player folder is the most recent for every possible host
+	entries, err = os.ReadDir(playerSavePath) // read again to get the updated list (if a new player folder was created)
+	utils.HandleErr(err)
+
+	for _, entry := range entries {
+		hasNameInIt := strings.Contains(entry.Name(), ssNameWithUnderScore)
+		if hasNameInIt && strings.HasSuffix(entry.Name(), "_player") {
+			if entry.Name() == mostRecentPlayerFolderName {
+				continue
+			}
+			err := os.RemoveAll(filepath.Join(playerSavePath, entry.Name()))
+			utils.HandleErr(err)
+
+			fullPathMostRecent := filepath.Join(playerSavePath, mostRecentPlayerFolderName)
+			fullPathCurrent := filepath.Join(playerSavePath, entry.Name())
+			err = cp.Copy(fullPathMostRecent, fullPathCurrent)
+			utils.HandleErr(err)
+		}
+	}
+
+	log.Info("Player save folders updated")
+}
+
+// GetPlayers returns the list of players in the server
+func (ss SyncedServer) GetPlayers() []string {
+	playersFilePath := filepath.Join(ss.GetServerPath(), "players.txt")
+	players := []string{}
+
+	if _, err := os.Stat(playersFilePath); !os.IsNotExist(err) {
+		file, err := os.Open(playersFilePath)
+		utils.HandleErr(err)
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.TrimSpace(line)
+			line = strings.Trim(line, "\n")
+			line = strings.Trim(line, "\r")
+			players = append(players, line)
+		}
+		utils.HandleErr(scanner.Err())
+	}
+
+	return players
 }
 
 // UpdatePlayersFile updates the players file of the server.
 // It creates the file if it doesn't exist, otherwise ensures your steam id is in the file
 func (ss SyncedServer) UpdatePlayersFile() {
+	log.Info("Updating players file")
+
 	playersFilePath := filepath.Join(ss.GetServerPath(), "players.txt")
 	// if the file exists, ensure your steam id is in the file
 	if _, err := os.Stat(playersFilePath); !os.IsNotExist(err) {
@@ -173,130 +313,8 @@ func (ss SyncedServer) UpdatePlayersFile() {
 		_, err = file.WriteString(config.PZ_SteamID + "\n")
 		utils.HandleErr(err)
 	}
-}
 
-// InitGit initializes the git repository for the synced server
-func (ss *SyncedServer) InitGit() {
-	utils.EnsureDir(ss.GetServerPath())
-
-	repo, err := git.PlainOpen(ss.GetServerPath())
-	if err == git.ErrRepositoryNotExists {
-		fmt.Println("Creating local git repository")
-		repo, err = git.PlainInit(ss.GetServerPath(), false)
-		utils.HandleErr(err)
-		_, err = repo.CreateRemote(&gitconfig.RemoteConfig{
-			Name: "origin",
-			URLs: []string{ss.GitURL},
-		})
-		utils.HandleErr(err)
-	} else if err != nil {
-		log.Fatal(err)
-	}
-
-	ss.repo = repo
-}
-
-func (ss *SyncedServer) Clone() {
-	// gitreponame is the last sector of the giturl
-	gitRepoName := filepath.Base(ss.GitURL)
-	tempDirName := filepath.Join(config.ServersPath, gitRepoName)
-
-	utils.EnsureDir(config.ServersPath)
-	utils.EnsureDir(tempDirName)
-	repo, err := git.PlainClone(tempDirName, false, &git.CloneOptions{
-		URL:  ss.GitURL,
-		Auth: config.GitAuth,
-	})
-	utils.HandleErr(err)
-
-	ss.repo = repo
-
-	// Get server name
-	configPath := filepath.Join(tempDirName, "config")
-	err = filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if strings.HasSuffix(filepath.Base(path), ".ini") {
-			ss.Name = strings.TrimSuffix(filepath.Base(path), ".ini")
-			return errors.New("stop")
-		}
-		return nil
-	})
-	if err != nil && err.Error() != "stop" {
-		log.Fatal(err)
-	}
-
-	// Renames the directory to the server name
-	newDirName := ss.GetServerPath()
-	err = os.Rename(tempDirName, newDirName)
-	utils.HandleErr(err)
-
-	// Recreates repo with the new directory
-	ss.repo, err = git.PlainOpen(newDirName)
-	utils.HandleErr(err)
-}
-
-// Pull pulls the latest changes from the git repository
-// Returns true if there are new changes
-func (ss SyncedServer) Pull() bool {
-	if ss.repo == nil {
-		ss.InitGit()
-	}
-
-	w, err := ss.repo.Worktree()
-	utils.HandleErr(err)
-
-	err = w.Pull(&git.PullOptions{
-		RemoteName: "origin",
-		Auth:       config.GitAuth,
-	})
-	if err == git.NoErrAlreadyUpToDate {
-		return false
-	} else {
-		utils.HandleErr(err)
-	}
-
-	return true
-}
-
-func (ss SyncedServer) Commit() {
-	if ss.repo == nil {
-		ss.InitGit()
-	}
-
-	w, err := ss.repo.Worktree()
-	utils.HandleErr(err)
-
-	_, err = w.Add(".")
-	utils.HandleErr(err)
-
-	commitMsg := fmt.Sprintf("SyncedPZ: synced by %s", config.PZ_SteamID)
-	_, err = w.Commit(commitMsg, &git.CommitOptions{})
-	if err != git.ErrEmptyCommit {
-		utils.HandleErr(err)
-	}
-}
-
-func (ss SyncedServer) Push() {
-	if ss.repo == nil {
-		ss.InitGit()
-	}
-
-	err := ss.repo.Push(&git.PushOptions{
-		RemoteName: "origin",
-		Auth:       config.GitAuth,
-		Progress:   os.Stdout,
-	})
-	if err != git.NoErrAlreadyUpToDate {
-		utils.HandleErr(err)
-	}
-}
-
-func (ss SyncedServer) CommitAndPush() {
-	ss.Commit()
-	ss.Push()
+	log.Info("Players file updated")
 }
 
 func GetSyncedServers() map[string]*SyncedServer {

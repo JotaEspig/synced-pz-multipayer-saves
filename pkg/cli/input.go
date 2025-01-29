@@ -15,5 +15,6 @@ func askForInput(prompt string) string {
 	input, _ = in.ReadString('\n')
 	input = strings.ReplaceAll(input, "\r", "")
 	input = strings.ReplaceAll(input, "\n", "")
+	input = strings.TrimSpace(input)
 	return input
 }

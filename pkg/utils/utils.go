@@ -2,9 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
+
+	"github.com/charmbracelet/log"
 )
 
 // return true if the directory already exists, false if it was created

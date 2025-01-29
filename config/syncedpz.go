@@ -1,11 +1,18 @@
 package config
 
 import (
-	"log"
 	"os/exec"
 	"syncedpz/pkg/utils"
 
+	"github.com/charmbracelet/log"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+)
+
+const (
+	LANG_START = iota
+	LANG_EN    = iota
+	LANG_PTBR  = iota
+	LANG_END   = iota
 )
 
 var (
@@ -14,7 +21,12 @@ var (
 	PZ_SteamID  string
 	GitAuth     transport.AuthMethod
 	ServersPath = DataPath + "/servers"
+	Launguage   int
 )
+
+func IsLanguageValid(lang int) bool {
+	return lang > LANG_START && lang < LANG_END
+}
 
 func checkExistenceOfGit() {
 	_, err := exec.LookPath("git")
