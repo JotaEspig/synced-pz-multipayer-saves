@@ -224,6 +224,7 @@ func cloneServer() {
 	ss := syncedpz.SyncedServer{GitURL: gitURL}
 
 	ss.Clone()
+	ss.CopySyncedServerToLocal()
 	ss.UpdatePlayersFile()
 	ss.CommitAndPush()
 	ss.Save()

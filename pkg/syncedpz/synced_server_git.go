@@ -112,7 +112,7 @@ func (ss *SyncedServer) Pull() bool {
 	return true
 }
 
-func (ss SyncedServer) Commit() {
+func (ss *SyncedServer) Commit() {
 	if ss.repo == nil {
 		ss.InitGit()
 	}

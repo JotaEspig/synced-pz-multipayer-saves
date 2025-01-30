@@ -63,7 +63,7 @@ func (ss SyncedServer) Serialize() []byte {
 }
 
 // Save saves the server object to the database
-func (ss SyncedServer) Save() {
+func (ss *SyncedServer) Save() {
 	err := config.DB.Update(func(txn *badger.Txn) error {
 		return txn.Set(ss.GetKey(), ss.Serialize())
 	})
@@ -73,7 +73,7 @@ func (ss SyncedServer) Save() {
 }
 
 // Delete deletes the server object from the database
-func (ss SyncedServer) Delete() {
+func (ss *SyncedServer) Delete() {
 	err := config.DB.Update(func(txn *badger.Txn) error {
 		return txn.Delete(ss.GetKey())
 	})
@@ -83,7 +83,7 @@ func (ss SyncedServer) Delete() {
 }
 
 // Delete deletes the server object from the database
-func (ss SyncedServer) EnsureDirs() {
+func (ss *SyncedServer) EnsureDirs() {
 	serverPath := ss.GetServerPath()
 	utils.EnsureDir(serverPath)
 	utils.EnsureDir(filepath.Join(serverPath, "config"))
@@ -104,6 +104,8 @@ func (ss *SyncedServer) CopyLocalServerToSynced() {
 	// copy config files
 	configPath := filepath.Join(ss.GetServerPath(), "config")
 	pzConfigFilesPath := filepath.Join(config.PZ_DataPath, "Server")
+	utils.EnsureDir(pzConfigFilesPath)
+
 	err := filepath.Walk(pzConfigFilesPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -125,6 +127,8 @@ func (ss *SyncedServer) CopyLocalServerToSynced() {
 	// copy save files
 	savePath := filepath.Join(ss.GetServerPath(), "save")
 	pzSaveFilesPath := filepath.Join(config.PZ_DataPath, "Saves", "Multiplayer")
+	utils.EnsureDir(pzSaveFilesPath)
+
 	ssNameWithUnderScore := strings.ReplaceAll(ss.Name, " ", "_")
 	fullLocalServerPath := filepath.Join(pzSaveFilesPath, ssNameWithUnderScore)
 
@@ -146,6 +150,9 @@ func (ss *SyncedServer) CopySyncedServerToLocal() {
 	// copy config files
 	configPath := filepath.Join(ss.GetServerPath(), "config")
 	pzConfigFilesPath := filepath.Join(config.PZ_DataPath, "Server")
+	utils.EnsureDir(configPath)
+	utils.EnsureDir(pzConfigFilesPath)
+
 	err := filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -167,6 +174,9 @@ func (ss *SyncedServer) CopySyncedServerToLocal() {
 	// copy save files
 	savePath := filepath.Join(ss.GetServerPath(), "save")
 	pzSaveFilesPath := filepath.Join(config.PZ_DataPath, "Saves", "Multiplayer")
+	utils.EnsureDir(savePath)
+	utils.EnsureDir(pzSaveFilesPath)
+
 	ssNameWithUnderScore := strings.ReplaceAll(ss.Name, " ", "_")
 	fullLocalServerPath := filepath.Join(pzSaveFilesPath, ssNameWithUnderScore)
 
@@ -273,7 +283,7 @@ func (ss SyncedServer) GetPlayers() []string {
 
 // UpdatePlayersFile updates the players file of the server.
 // It creates the file if it doesn't exist, otherwise ensures your steam id is in the file
-func (ss SyncedServer) UpdatePlayersFile() {
+func (ss *SyncedServer) UpdatePlayersFile() {
 	log.Info("Updating players file")
 
 	playersFilePath := filepath.Join(ss.GetServerPath(), "players.txt")
