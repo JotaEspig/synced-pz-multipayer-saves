@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -23,8 +24,8 @@ func Run(ch chan os.Signal) {
 	defer func() {
 		// Read a single byte (key press)
 		fmt.Print(config.GTM("Press any key to exit..."))
-		var b [1]byte
-		_, _ = os.Stdin.Read(b[:])
+		reader := bufio.NewReader(os.Stdin)
+		_, _ = reader.ReadByte()
 
 		// Send interrupt signal to main
 		ch <- os.Interrupt

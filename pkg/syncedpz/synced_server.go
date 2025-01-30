@@ -31,23 +31,6 @@ func NewSyncedServer(name, gitURL string) *SyncedServer {
 	}
 }
 
-// LoadSyncedServer loads a synced server from the database
-func LoadSyncedServer(name string) *SyncedServer {
-	ss := &SyncedServer{}
-	err := config.DB.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("server_" + name))
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			dec := gob.NewDecoder(bytes.NewReader(val))
-			return dec.Decode(&ss)
-		})
-	})
-	utils.HandleErr(err)
-	return ss
-}
-
 // GetKey returns the key of the server used in the database
 func (ss SyncedServer) GetKey() []byte {
 	return []byte("server_" + ss.Name)
@@ -296,7 +279,7 @@ func (ss *SyncedServer) EnsureUpdatedPlayerSaveFolders() {
 		}
 	}
 
-	log.Info("Player save folders updated")
+	log.Info("Updated player save folders ensured")
 }
 
 // GetPlayers returns the list of players in the server
@@ -370,8 +353,8 @@ func (ss *SyncedServer) UpdatePlayersFile() {
 }
 
 // GetSyncedServers returns all synced servers
-func GetSyncedServers() map[string]*SyncedServer {
-	servers := map[string]*SyncedServer{}
+func GetSyncedServers() []*SyncedServer {
+	servers := []*SyncedServer{}
 	err := config.DB.View(func(txn *badger.Txn) error {
 		// Get all servers (it starts with prefix : "server_")
 		opts := badger.DefaultIteratorOptions
@@ -388,7 +371,7 @@ func GetSyncedServers() map[string]*SyncedServer {
 				if err != nil {
 					return err
 				}
-				servers[ss.Name] = ss
+				servers = append(servers, ss)
 				return nil
 			})
 			if err != nil {
@@ -398,7 +381,7 @@ func GetSyncedServers() map[string]*SyncedServer {
 		return nil
 	})
 	if err != nil {
-		return map[string]*SyncedServer{}
+		return []*SyncedServer{}
 	}
 
 	return servers

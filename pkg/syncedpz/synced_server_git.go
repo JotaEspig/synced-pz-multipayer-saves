@@ -85,6 +85,50 @@ func (ss *SyncedServer) Clone() {
 	log.Info("Server cloned successfully")
 }
 
+// Restore restores the server to the last commit, useful to undo changes in case of a syncronization during
+// an IO operation like copying files
+func (ss *SyncedServer) Restore() {
+	if ss.repo == nil {
+		ss.InitGit()
+	}
+
+	log.Info("Starting to restore server")
+
+	w, err := ss.repo.Worktree()
+	utils.HandleErr(err)
+
+	err = w.Reset(&git.ResetOptions{
+		Mode: git.HardReset,
+	})
+	utils.HandleErr(err)
+	removeUnstagedFiles(w)
+
+	log.Info("Server restored")
+}
+
+// Fetch fetches the latest changes from the git repository
+// Useful to check if anything was pushed when doing IO operations like
+// copying local files to the synced server
+func (ss *SyncedServer) Fetch() bool {
+	if ss.repo == nil {
+		ss.InitGit()
+	}
+
+	log.Info("Trying to fetch changes")
+
+	err := ss.repo.Fetch(&git.FetchOptions{
+		RemoteName: "origin",
+		Auth:       config.GitAuth,
+	})
+	if err == git.NoErrAlreadyUpToDate {
+		log.Info("Already up to date")
+		return false
+	} else {
+		utils.HandleErr(err)
+	}
+	return true
+}
+
 // Pull pulls the latest changes from the git repository
 // Returns true if there are new changes
 func (ss *SyncedServer) Pull() bool {

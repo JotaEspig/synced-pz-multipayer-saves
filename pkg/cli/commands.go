@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -82,7 +84,11 @@ func menu() {
 		fn()
 
 		choice = -1 // Reset choice to run the menu again
-		time.Sleep(1 * time.Second)
+
+		// Read a single byte (key press)
+		fmt.Print(config.GTM("Press any key to continue..."))
+		reader := bufio.NewReader(os.Stdin)
+		_, _ = reader.ReadByte()
 	}
 }
 
@@ -139,10 +145,8 @@ func listLocalServers() {
 
 func listSyncedServers() {
 	servers := syncedpz.GetSyncedServers()
-	i := 0
-	for _, ss := range servers {
+	for i, ss := range servers {
 		fmt.Printf("[%d] - %s\n", i, ss.Name)
-		i++
 	}
 }
 
@@ -200,12 +204,8 @@ func deleteServer() {
 		return
 	}
 
-	serversArray := make([]*syncedpz.SyncedServer, len(servers))
-	i := 0
-	for _, ss := range servers {
+	for i, ss := range servers {
 		fmt.Printf("[%d] %s\n", i, ss.Name)
-		serversArray[i] = ss
-		i++
 	}
 	choice := askForInput(config.GTM("Enter the number of the server you want to delete: "))
 	choiceInt, err := strconv.Atoi(choice)
@@ -215,7 +215,7 @@ func deleteServer() {
 		return
 	}
 
-	server := serversArray[choiceInt]
+	server := servers[choiceInt]
 	server.Delete()
 }
 
@@ -240,7 +240,15 @@ func syncServers() {
 			ss.CopySyncedServerToLocal()
 		} else { // If there are no changes, prioritize pushing
 			ss.CopyLocalServerToSynced()
-			ss.CommitAndPush()
+			// Try to fetch again to check if there are new changes
+			// If there are, pull them and discard the local changes
+			if ss.Fetch() {
+				log.Error("There are new changes in the server, prioritizing them")
+				ss.Restore()
+				ss.Pull()
+			} else {
+				ss.CommitAndPush()
+			}
 		}
 		ss.EnsureUpdatedPlayerSaveFolders()
 	}
@@ -264,7 +272,15 @@ func play() {
 							ss.CopySyncedServerToLocal()
 						} else {
 							ss.CopyLocalServerToSynced()
-							ss.CommitAndPush()
+							// Try to fetch again to check if there are new changes
+							// If there are, pull them and discard the local changes
+							if ss.Fetch() {
+								log.Error("There are new changes in the server, prioritizing them")
+								ss.Restore()
+								ss.Pull()
+							} else {
+								ss.CommitAndPush()
+							}
 						}
 						ss.EnsureUpdatedPlayerSaveFolders()
 					}
@@ -280,12 +296,13 @@ func play() {
 	ch := make(chan struct{})
 	go keepSyncing(ch)
 
-	fmt.Println(config.PZ_BatPath)
+	log.Infof("Starting Project Zomboid with bat path:\n%s", config.PZ_BatPath)
 	cmd := exec.Command(config.PZ_BatPath)
 	utils.HandleErr(cmd.Start())
 
 	log.Info("Project Zomboid started with PID: ", cmd.Process.Pid)
 
+	// When Project Zomboid closes, send signal to stop the syncing
 	cmd.Wait()
 	close(ch)
 
@@ -298,7 +315,7 @@ func setLanguage() {
 	choice := -1
 	for !config.IsLanguageValid(choice) {
 		fmt.Printf(" [%d] English\n", config.LANG_EN)
-		fmt.Printf(" [%d] Português\n", config.LANG_PTBR)
+		fmt.Printf(" [%d] Português (BR)\n", config.LANG_PTBR)
 		choiceStr := askForInput(config.GTM("Enter the number of the language you want to choose: "))
 		choice, err = strconv.Atoi(choiceStr)
 		if err != nil || !config.IsLanguageValid(choice) {

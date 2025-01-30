@@ -38,6 +38,7 @@ func init() {
 	ptbrDict := make(map[string]string)
 
 	ptbrDict["Press any key to exit..."] = "Pressione qualquer tecla para sair..."
+	ptbrDict["Press any key to continue..."] = "Pressione qualquer tecla para continuar..."
 	ptbrDict["First time setup"] = "Configuração inicial"
 	ptbrDict["Type of servers to list"] = "Tipo de servidores para listar"
 	ptbrDict["No argument for config"] = "Nenhum foi argumento para config"
