@@ -74,7 +74,49 @@ func (ss *SyncedServer) Save() {
 
 // Delete deletes the server object from the database
 func (ss *SyncedServer) Delete() {
-	err := config.DB.Update(func(txn *badger.Txn) error {
+	log.Info("Deleting server")
+
+	ss.Pull() // Avoid some conflicts
+
+	// Remove line from players.txt where the steam id is
+	playersFilePath := filepath.Join(ss.GetServerPath(), "players.txt")
+	if _, err := os.Stat(playersFilePath); !os.IsNotExist(err) {
+		file, err := os.Open(playersFilePath)
+		utils.HandleErr(err)
+
+		// Get all lines except the one with the steam id
+		scanner := bufio.NewScanner(file)
+		lines := []string{}
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.TrimSpace(line)
+			line = strings.Trim(line, "\n")
+			line = strings.Trim(line, "\r")
+			if line != config.PZ_SteamID {
+				lines = append(lines, line)
+			}
+		}
+		utils.HandleErr(scanner.Err())
+		file.Close()
+
+		// Rewrite the file with the new lines
+		file, err = os.Create(playersFilePath)
+		utils.HandleErr(err)
+
+		for _, line := range lines {
+			_, err = file.WriteString(line + "\n")
+			utils.HandleErr(err)
+		}
+		file.Close()
+	}
+
+	// Save the changes in repository for tracking purposes
+	ss.CommitAndPush()
+
+	err := os.RemoveAll(ss.GetServerPath())
+	utils.HandleErr(err)
+
+	err = config.DB.Update(func(txn *badger.Txn) error {
 		return txn.Delete(ss.GetKey())
 	})
 	utils.HandleErr(err)
