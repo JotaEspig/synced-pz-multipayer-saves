@@ -1,5 +1,7 @@
 # Instructions and usage
 
+First, download the latest release from the [releases page](https://github.com/JotaEspig/synced-pz-multiplayer-saves/releases).
+
 ## Install Git on your computer
 
 You can download Git from the official website: [Git](https://git-scm.com/downloads)
