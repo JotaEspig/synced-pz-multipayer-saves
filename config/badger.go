@@ -7,21 +7,17 @@ import (
 	"github.com/dgraph-io/badger"
 )
 
-const (
-	badgerDBPath = DataPath + "/badger"
-)
-
 var (
 	FirstTimeSetup bool
 	DB             *badger.DB
 )
 
-func init() {
+func InitDB(path string) {
 	var err error
 
-	FirstTimeSetup = !utils.EnsureDir(DataPath)
+	FirstTimeSetup = !utils.EnsureDir(path)
 
-	opts := badger.DefaultOptions(badgerDBPath)
+	opts := badger.DefaultOptions(path + "/badger")
 	opts.Logger = nil
 	opts.Truncate = true
 
@@ -29,4 +25,8 @@ func init() {
 	utils.HandleErr(err)
 
 	log.Info("BadgerDB initialized")
+}
+
+func init() {
+	InitDB(DataPath)
 }

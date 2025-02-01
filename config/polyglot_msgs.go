@@ -91,6 +91,7 @@ func init() {
 	ptbrDict["Enter the git repository link to the server: "] = "Digite o link do repositório git para o servidor: "
 	ptbrDict["Server cloned successfully"] = "Servidor clonado com sucesso"
 	ptbrDict["Enter the number of the language you want to choose: "] = "Digite o número do idioma que deseja escolher: "
+	ptbrDict["WARNING: Commiting and pushing can take a while, please wait..."] = "AVISO: Comitar e fazer push pode demorar um pouco, por favor aguarde..."
 
 	dict[LANG_PTBR] = ptbrDict
 }

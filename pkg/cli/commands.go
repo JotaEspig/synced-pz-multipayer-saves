@@ -191,6 +191,7 @@ func addServer() {
 
 	ss.CopyLocalServerToSynced()
 	ss.UpdatePlayersFile()
+	fmt.Println(config.GTM("WARNING: Commiting and pushing can take a while, please wait..."))
 	ss.CommitAndPush()
 	ss.Save()
 

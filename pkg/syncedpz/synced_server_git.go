@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 // InitGit initializes the git repository for the synced server
@@ -145,7 +146,7 @@ func (ss *SyncedServer) Pull() bool {
 		RemoteName: "origin",
 		Auth:       config.GitAuth,
 	})
-	if err == git.NoErrAlreadyUpToDate {
+	if err == git.NoErrAlreadyUpToDate || err == transport.ErrEmptyRemoteRepository {
 		log.Info("Already up to date")
 		return false
 	} else {
